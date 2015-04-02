@@ -1,0 +1,30 @@
+*************************************************************
+FileName = Gimbal_3.0.GBR
+AutoAperture = True
+*************************************************************
+Generating : Drill Drawing
+      File : Gimbal_3.0.GD1
+
+    Adding Drill Pair : Top Layer-Bottom Layer
+
+    Adding Layer      : Drill Drawing
+
+
+Used DCodes :
+    D10
+    D11
+*************************************************************
+
+*************************************************************
+Generating : Drill Guide
+      File : Gimbal_3.0.GG1
+
+    Adding Drill Pair : Top Layer-Bottom Layer
+
+    Adding Layer      : Drill Guide
+
+
+Used DCodes :
+    D10
+*************************************************************
+

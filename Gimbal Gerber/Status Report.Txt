@@ -1,0 +1,13 @@
+Output: NC Drill Files
+Type  : NC Drill
+From  : Project [Gimbal_3.0.PrjPcb]
+   Generated File[Gimbal_3.0.TXT]
+   Generated File[Gimbal_3.0.DRL]
+   Generated File[Gimbal_3.0.LDP]
+   Generated File[Gimbal_3.0.DRR]
+
+
+Files Generated   : 4
+Documents Printed : 0
+
+Finished Output Generation At 18:31:20 On 2014/12/31
