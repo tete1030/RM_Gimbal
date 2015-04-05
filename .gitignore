@@ -30,3 +30,9 @@
 
 # Debug files
 *.dSYM/
+
+# Mac trash store
+.DS_Store
+
+# Keil Object files
+Project/Objects
