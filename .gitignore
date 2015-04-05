@@ -34,5 +34,12 @@
 # Mac trash store
 .DS_Store
 
-# Keil Object files
+# Keil object files
 Project/Objects
+
+# Keil project files
+Project/JLinkLog.txt
+Project/STM32F4.uvgui.*
+Project/STM32F4.uvgui_*
+Project/*.bak
+
