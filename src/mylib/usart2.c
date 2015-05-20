@@ -79,17 +79,7 @@ void USART2_SendChar(unsigned char b)
     while (USART_GetFlagStatus(USART2,USART_FLAG_TC) == RESET);
 	USART_SendData(USART2,b);
 }
-int _write(int file, char* ptr, int len)
-{
-	int i = 0;
-	for (i = 0; i< len; i++)
-	{
-		while (USART_GetFlagStatus(USART2, USART_FLAG_TC) == RESET)
-			;
-		USART_SendData(USART2, ptr[i]);
-	}
-	return i;
-}
+
 #if defined ( STDOUT_USART2 )
 #if defined ( __CC_ARM )
 int fputc(int ch, FILE *f)
@@ -99,7 +89,7 @@ int fputc(int ch, FILE *f)
     return ch;
 }
 #elif defined ( __GNUC__ )
-/*
+
 int _write(int file, char* ptr, int len)
 {
 	int i = 0;
@@ -110,7 +100,7 @@ int _write(int file, char* ptr, int len)
 		USART_SendData(USART2, ptr[i]);
 	}
 	return i;
-}*/
+}
 #endif
 
 #endif

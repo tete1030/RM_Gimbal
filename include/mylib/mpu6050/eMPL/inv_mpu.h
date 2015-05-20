@@ -20,6 +20,8 @@
 
 #ifndef _INV_MPU_H_
 #define _INV_MPU_H_
+
+#include <stdint.h>
 #include "stm32f4xx.h"
 
 //定义输出速度
@@ -112,6 +114,8 @@ int mpu_get_temperature(long *data, unsigned long *timestamp);
 int mpu_get_int_status(short *status);
 int mpu_read_fifo(short *gyro, short *accel, unsigned long *timestamp,
     unsigned char *sensors, unsigned char *more);
+
+int mpu_get_fifo_data_count();
 int mpu_read_fifo_stream(unsigned short length, unsigned char *data,
     unsigned char *more);
 int mpu_reset_fifo(void);
@@ -131,9 +135,10 @@ int mpu_register_tap_cb(void (*func)(unsigned char, unsigned char));
 void mget_ms(unsigned long *time);
 unsigned short inv_row_2_scale(const signed char *row);
 unsigned short inv_orientation_matrix_to_scalar(const signed char *mtx);
-u8 run_self_test(void);
-u8 mpu_dmp_init(void);
-u8 mpu_dmp_get_data(float *pitch,float *roll,float *yaw);
+uint8_t run_self_test(void);
+
+
+
 
 #endif  /* #ifndef _INV_MPU_H_ */
 

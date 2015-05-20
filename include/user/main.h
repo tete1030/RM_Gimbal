@@ -4,7 +4,6 @@
 #include "stm32f4xx.h"
 
 #include "app.h"
-#include "bsp.h"
 #include "imu.h"
 
 #include <stdio.h>

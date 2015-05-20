@@ -1,9 +1,11 @@
 #ifndef __DELAY_H__
 #define __DELAY_H__
 
-#include <stm32f4xx.h>
+#include <stdint.h>
 
-void delay_ms(unsigned int t);
-void delay_us(unsigned int t);
+void delay_init(void);
+
+void delay_us(uint32_t nus);
+void delay_ms(uint16_t nms);
 
 #endif 

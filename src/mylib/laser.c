@@ -1,24 +1,6 @@
 #include "laser.h"
 
-
-void RELAY_Configuration(void)
-{
-	GPIO_InitTypeDef gpio;   
-
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB,ENABLE);
-  		
-	gpio.GPIO_Pin = GPIO_Pin_8 | GPIO_Pin_9;	//cyq
-    gpio.GPIO_Mode = GPIO_Mode_OUT;
-	gpio.GPIO_OType = GPIO_OType_PP;
-	gpio.GPIO_Speed = GPIO_Speed_100MHz;
-	gpio.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_Init(GPIOB, &gpio);
-	HALT();
-}
-
-
-
-void LASER_Configuration(void)//cyq
+void Laser_Configuration(void)
 {
 	GPIO_InitTypeDef gpio;   
 
@@ -30,13 +12,14 @@ void LASER_Configuration(void)//cyq
 	gpio.GPIO_Speed = GPIO_Speed_100MHz;
 	gpio.GPIO_PuPd = GPIO_PuPd_NOPULL;
 	GPIO_Init(GPIOA, &gpio);
-	GPIO_SetBits(GPIOA,GPIO_Pin_1);//cyq
+    Laser_Off();
 }
+
 
 /*-H1--(PB8--TIM4_CH3)--*/
 /*-H2--(PB9--TIM4_CH4)--*/
 
-
+/*
 void PWM2_Configuration(void)
 {
     GPIO_InitTypeDef          gpio;
@@ -83,3 +66,4 @@ void PWM2_Configuration(void)
 
     TIM_Cmd(TIM4,ENABLE);
 }
+*/

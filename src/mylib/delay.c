@@ -1,23 +1,38 @@
+#include "stm32f4xx.h"
 #include "delay.h"
+#include "ticker.h"
 
-void delay_ms(unsigned int t)
+static uint32_t fac_ms = 0;
+
+void delay_init()
 {
-	int i;
-	for( i=0;i<t;i++)
-	{
-		int a=42000; //at 168MHz 42000 is ok
-		while(a--)
-			asm("");
-	}
+	fac_ms = Ticker_Get_MS_Tickcount();
+
 }
 
-void delay_us(unsigned int t)
+void delay_us(uint32_t nus)
 {
-	int i;
-	for( i=0;i<t;i++)
+	uint64_t curtick = Ticker_Get_Tick();
+	uint64_t endtick = curtick + ((uint64_t)nus * (uint64_t)fac_ms) / 1000;
+
+	while(1)
 	{
-		int a=40;  //at 168MHz 40 is ok,the higher the number the more timing precise
-		while(a--)
-			asm("");
+		if(Ticker_Get_Tick() >= endtick)
+			break;
 	}
+
 }
+
+void delay_ms(uint16_t nms)
+{
+	uint64_t curtick = Ticker_Get_Tick();
+	uint64_t endtick = curtick + (uint64_t)nms * (uint64_t)fac_ms;
+
+	while(1)
+	{
+		if(Ticker_Get_Tick() >= endtick)
+			break;
+	}
+
+}
+

@@ -27,6 +27,26 @@ void SysTick_Handler(void);
 }
 #endif
 
+
+#define ITP_SYSTICK_PREEMPTION 0
+#define ITP_SYSTICK_SUB 0
+
+#define ITP_CAN1_RX0_PREEMPTION 2
+#define ITP_CAN1_RX0_SUB 1
+
+#define ITP_CAN1_TX_PREEMPTION 2
+#define ITP_CAN1_TX_SUB 2
+
+#define ITP_CAN2_RX0_PREEMPTION 2
+#define ITP_CAN2_RX0_SUB 1
+
+#define ITP_CAN2_TX_PREEMPTION 2
+#define ITP_CAN2_TX_SUB 2
+
+#define ITP_MPU_EXTI9_5_PREEMPTION 1
+#define ITP_MPU_EXTI9_5_SUB 0
+
+
 #endif /* __STM32F4xx_IT_H */
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/

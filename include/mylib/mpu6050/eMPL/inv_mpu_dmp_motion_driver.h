@@ -87,6 +87,8 @@ int dmp_set_pedometer_walk_time(unsigned long time);
 /* DMP gyro calibration functions. */
 int dmp_enable_gyro_cal(unsigned char enable);
 
+int16_t dmp_get_fifo_packet_count();
+
 /* Read function. This function should be called whenever the MPU interrupt is
  * detected.
  */

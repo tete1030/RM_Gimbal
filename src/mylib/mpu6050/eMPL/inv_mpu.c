@@ -22,11 +22,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <mpu6050/eMPL/inv_mpu.h>
-#include <mpu6050/eMPL/inv_mpu_dmp_motion_driver.h>
+#include "mpu6050/eMPL/inv_mpu.h"
+#include "mpu6050/eMPL/inv_mpu_dmp_motion_driver.h"
 
 #include "mpu6050/mpu6050.h"
 #include "delay.h"
+
+#include "timer.h"
 
 
 #define MPU6050							//定义我们使用的传感器为MPU6050
@@ -44,14 +46,63 @@
  * fabsf(float x)
  * min(int a, int b)
  */
-#if defined MOTION_DRIVER_TARGET_MSP430
-//#include "msp430.h"
-//#include "msp430_i2c.h"
-//#include "msp430_clock.h"
-//#include "msp430_interrupt.h"
 
-#define i2c_write   MPU_Write_Len
-#define i2c_read    MPU_Read_Len
+uint8_t mpu_iic_write_len(uint8_t addr,uint8_t reg,uint8_t len,uint8_t *buf)
+{
+    uint8_t i;
+    IIC_Start();
+    IIC_Send_Byte((addr<<1)|0);//发送器件地址+写命令
+    if(IIC_Wait_Ack())	//等待应答
+    {
+        IIC_Stop();
+        return 1;
+    }
+    IIC_Send_Byte(reg);	//写寄存器地址
+    IIC_Wait_Ack();		//等待应答
+    for(i=0;i<len;i++)
+    {
+        IIC_Send_Byte(buf[i]);	//发送数据
+        if(IIC_Wait_Ack())		//等待ACK
+        {
+            IIC_Stop();
+            return 1;
+        }
+    }
+    IIC_Stop();
+    return 0;
+}
+
+uint8_t mpu_iic_read_len(uint8_t addr,uint8_t reg,uint8_t len,uint8_t *buf)
+{
+    IIC_Start();
+    IIC_Send_Byte((addr<<1)|0);//发送器件地址+写命令
+    if(IIC_Wait_Ack())	//等待应答
+    {
+        IIC_Stop();
+        return 1;
+    }
+    IIC_Send_Byte(reg);	//写寄存器地址
+    IIC_Wait_Ack();		//等待应答
+    IIC_Start();
+    IIC_Send_Byte((addr<<1)|1);//发送器件地址+读命令
+    IIC_Wait_Ack();		//等待应答
+    while(len)
+    {
+        if(len==1)*buf=IIC_Read_Byte(0);//读数据,发送nACK
+        else *buf=IIC_Read_Byte(1);		//读数据,发送ACK
+        len--;
+        buf++;
+    }
+    IIC_Stop();	//产生一个停止条件
+    return 0;
+}
+
+
+
+#if defined MOTION_DRIVER_TARGET_MSP430
+
+#define i2c_write   mpu_iic_write_len
+#define i2c_read    mpu_iic_read_len
 #define delay_ms    delay_ms
 #define get_ms      mget_ms
 //static inline int reg_int_cb(struct int_param_s *int_param)
@@ -1682,6 +1733,21 @@ int mpu_get_int_status(short *status)
     return 0;
 }
 
+
+/**
+ *  @brief      Get unparsed data count from the FIFO.
+ *  @return     Number of remaining data.
+ */
+
+int mpu_get_fifo_data_count()
+{
+    unsigned char tmp[2];
+    if (i2c_read(st.hw->addr, st.reg->fifo_count_h, 2, tmp))
+        return -1;
+    return (tmp[0] << 8) | tmp[1];
+
+};
+
 /**
  *  @brief      Get one packet from the FIFO.
  *  If @e sensors does not contain a particular sensor, disregard the data
@@ -1773,6 +1839,7 @@ int mpu_read_fifo(short *gyro, short *accel, unsigned long *timestamp,
 
     return 0;
 }
+
 
 /**
  *  @brief      Get one unparsed packet from the FIFO.
@@ -2851,26 +2918,7 @@ lp_int_restore:
     st.chip_cfg.int_motion_only = 0;
     return 0;
 }
-//////////////////////////////////////////////////////////////////////////////////
-//添加的代码部分
-//////////////////////////////////////////////////////////////////////////////////	  
-//ALIENTEK STM32F407开发板
-//MPU6050 DMP 驱动代码
-//正点原子@ALIENTEK
-//技术论坛:www.openedv.com
-//创建日期:2014/5/9
-//版本：V1.0
-//Copyright(C) 广州市星翼电子科技有限公司 2014-2024
-//All rights reserved									  
-////////////////////////////////////////////////////////////////////////////////// 
 
-//q30格式,long转float时的除数.
-#define q30  1073741824.0f
-
-//陀螺仪方向设置
-static signed char gyro_orientation[9] = { -1, 0, 0,
-                                           0, -1, 0,
-                                           0, 0, 1};
 //MPU6050自测试
 //返回值:0,正常
 //    其他,失败
@@ -2947,94 +2995,5 @@ void mget_ms(unsigned long *time)
 {
 
 }
-//mpu6050,dmp初始化
-//返回值:0,正常
-//    其他,失败
-u8 mpu_dmp_init(void)
-{
-	u8 res=0;
-	IIC_Init(); 		//初始化IIC总线
-	if(mpu_init()==0)	//初始化MPU6050
-	{	 
-		res=mpu_set_sensors(INV_XYZ_GYRO|INV_XYZ_ACCEL);//设置所需要的传感器
-		if(res)return 1; 
-		res=mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);//设置FIFO
-		if(res)return 2; 
-		res=mpu_set_sample_rate(DEFAULT_MPU_HZ);	//设置采样率
-		if(res)return 3; 
-		res=dmp_load_motion_driver_firmware();		//加载dmp固件
-		if(res)return 4; 
-		res=dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation));//设置陀螺仪方向
-		if(res)return 5; 
-		res=dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT|DMP_FEATURE_TAP|	//设置dmp功能
-		    DMP_FEATURE_ANDROID_ORIENT|DMP_FEATURE_SEND_RAW_ACCEL|DMP_FEATURE_SEND_CAL_GYRO|
-		    DMP_FEATURE_GYRO_CAL);
-		if(res)return 6; 
-		res=dmp_set_fifo_rate(DEFAULT_MPU_HZ);	//设置DMP输出速率(最大不超过200Hz)
-		if(res)return 7;   
-		res=run_self_test();		//自检
-		if(res)return 8;    
-		res=mpu_set_dmp_state(1);	//使能DMP
-		if(res)return 9;     
-	}
-	return 0;
-}
-//得到dmp处理后的数据(注意,本函数需要比较多堆栈,局部变量有点多)
-//pitch:俯仰角 精度:0.1°   范围:-90.0° <---> +90.0°
-//roll:横滚角  精度:0.1°   范围:-180.0°<---> +180.0°
-//yaw:航向角   精度:0.1°   范围:-180.0°<---> +180.0°
-//返回值:0,正常
-//    其他,失败
-u8 mpu_dmp_get_data(float *pitch,float *roll,float *yaw)
-{
-	float q0=1.0f,q1=0.0f,q2=0.0f,q3=0.0f;
-	unsigned long sensor_timestamp;
-	short gyro[3], accel[3], sensors;
-	unsigned char more;
-	long quat[4]; 
-	if(dmp_read_fifo(gyro, accel, quat, &sensor_timestamp, &sensors,&more))return 1;	 
-	/* Gyro and accel data are written to the FIFO by the DMP in chip frame and hardware units.
-	 * This behavior is convenient because it keeps the gyro and accel outputs of dmp_read_fifo and mpu_read_fifo consistent.
-	**/
-	/*if (sensors & INV_XYZ_GYRO )
-	send_packet(PACKET_TYPE_GYRO, gyro);
-	if (sensors & INV_XYZ_ACCEL)
-	send_packet(PACKET_TYPE_ACCEL, accel); */
-	/* Unlike gyro and accel, quaternions are written to the FIFO in the body frame, q30.
-	 * The orientation is set by the scalar passed to dmp_set_orientation during initialization. 
-	**/
-	if(sensors&INV_WXYZ_QUAT) 
-	{
-		q0 = quat[0] / q30;	//q30格式转换为浮点数
-		q1 = quat[1] / q30;
-		q2 = quat[2] / q30;
-		q3 = quat[3] / q30; 
-		//计算得到俯仰角/横滚角/航向角
-		*pitch = asin(-2 * q1 * q3 + 2 * q0* q2)* 57.3;	// pitch
-		*roll  = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2* q2 + 1)* 57.3;	// roll
-		*yaw   = atan2(2*(q1*q2 + q0*q3),q0*q0+q1*q1-q2*q2-q3*q3) * 57.3;	//yaw
-	}else return 2;
-	return 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

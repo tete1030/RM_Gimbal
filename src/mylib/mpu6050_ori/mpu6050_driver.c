@@ -1,4 +1,6 @@
-#include "main.h"
+#include "delay.h"
+#include "mpu6050_ori/mpu6050_driver.h"
+#include "mpu6050_ori/mpu6050_i2c.h"
 
 //定义MPU6050内部地址
 #define	SMPLRT_DIV		0x19	//陀螺仪采样率 典型值 0X07 125Hz

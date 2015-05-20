@@ -1,20 +1,8 @@
 #ifndef __CAN2_H__
 #define __CAN2_H__
 
-#include <stm32f4xx.h>
-#include "laser.h"
-#include "can1.h"
-
-#define pitch_max 15.0
-#define yaw_max 720.0				//cyq:云台角度的范围
-
-void CAN2_Configuration(void);
-void GYRO_RST(void);
-void Encoder_sent(float encoder_angle);
-extern float YAW_Angle;
-extern float dipan_gyro_angle;
-extern uint8_t shooting_flag;
-extern int8_t gyro_ok_flag;
-extern float temp_pitch;
+void CAN2_Configuration(void (*send_handler)(uint16_t, int8_t), void (*receive_handler)(CanRxMsg*), uint16_t IdHigh, uint16_t IdHighMask, uint16_t IdLow, uint16_t IdLowMask);
+int8_t CAN2_Transmit(uint16_t id, uint16_t addr, char* data, uint8_t size);
+int8_t CAN2_AsyncTransmit(uint16_t id, uint16_t addr, char* data, uint8_t size);
 
 #endif 

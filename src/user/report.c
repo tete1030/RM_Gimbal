@@ -98,13 +98,11 @@ void Do_Report_MPU()
 	short aacx,aacy,aacz;		//加速度传感器原始数据
 	short gyrox,gyroy,gyroz;	//陀螺仪原始数据
 	short temp;					//温度
-
+	DMP_Data dd;
 
 	//uart_init(500000);		//初始化串口波特率为500000
 
-	MPU_Init();					//初始化MPU6050
-
-	while(mpu_dmp_init())
+	while(MPU_Init())
 	{
 		printf("MPU6050 Error\r\n");
 	}
@@ -112,13 +110,12 @@ void Do_Report_MPU()
 
  	while(1)
 	{
-		if(mpu_dmp_get_data(&pitch,&roll,&yaw)==0)
+		if(MPU_DMP_Get_Data(&dd)==0)
 		{
 			temp=MPU_Get_Temperature();	//得到温度值
-			MPU_Get_Accelerometer(&aacx,&aacy,&aacz);	//得到加速度传感器数据
-			MPU_Get_Gyroscope(&gyrox,&gyroy,&gyroz);	//得到陀螺仪数据
-			if(report)mpu6050_send_data(aacx,aacy,aacz,gyrox,gyroy,gyroz);//用自定义帧发送加速度和陀螺仪原始数据
-			if(report)usart1_report_imu(aacx,aacy,aacz,gyrox,gyroy,gyroz,(int)(roll*100),(int)(pitch*100),(int)(yaw*10));
+
+			if(report)mpu6050_send_data(dd.accel[0],dd.accel[1],dd.accel[2],dd.gyro[0],dd.gyro[1],dd.gyro[2]);//用自定义帧发送加速度和陀螺仪原始数据
+			if(report)usart1_report_imu(dd.accel[0],dd.accel[1],dd.accel[2],dd.gyro[0],dd.gyro[1],dd.gyro[2],(int)(dd.roll*100),(int)(dd.pitch*100),(int)(dd.yaw*10));
 			if((t%10)==0)
 			{
 				//printf("temp = %d, ", temp);

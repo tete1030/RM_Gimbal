@@ -18,19 +18,18 @@ set(SOURCE_FILES
     include/mylib/mpu6050/eMPL/inv_mpu.h
     include/mylib/mpu6050/eMPL/inv_mpu_dmp_motion_driver.h
     include/mylib/mpu6050/mpu6050.h
-    include/mylib/mpu6050_ori/mpu6050_driver.h
-    include/mylib/mpu6050_ori/mpu6050_i2c.h
-    include/mylib/mpu6050_ori/mpu6050_interrupt.h
-    include/mylib/mpu6050_ori/mpu6050_process.h
-    include/mylib/bsp.h
+    #include/mylib/mpu6050_ori/mpu6050_driver.h
+    #include/mylib/mpu6050_ori/mpu6050_i2c.h
+    #include/mylib/mpu6050_ori/mpu6050_interrupt.h
+    #include/mylib/mpu6050_ori/mpu6050_process.h
     include/mylib/can1.h
     include/mylib/can2.h
     include/mylib/delay.h
     include/mylib/laser.h
     include/mylib/led.h
     include/mylib/myiic.h
-    include/mylib/pwm.h
-    include/mylib/tim6.h
+    include/mylib/friction.h
+    include/mylib/timer.h
     include/mylib/usart1.h
     include/mylib/usart2.h
     include/user/app.h
@@ -44,19 +43,18 @@ set(SOURCE_FILES
     src/mylib/mpu6050/eMPL/inv_mpu.c
     src/mylib/mpu6050/eMPL/inv_mpu_dmp_motion_driver.c
     src/mylib/mpu6050/mpu6050.c
-    src/mylib/mpu6050_ori/mpu6050_driver.c
-    src/mylib/mpu6050_ori/mpu6050_i2c.c
-    src/mylib/mpu6050_ori/mpu6050_interrupt.c
-    src/mylib/mpu6050_ori/mpu6050_process.c
-    src/mylib/bsp.c
+    #src/mylib/mpu6050_ori/mpu6050_driver.c
+    #src/mylib/mpu6050_ori/mpu6050_i2c.c
+    #src/mylib/mpu6050_ori/mpu6050_interrupt.c
+    #src/mylib/mpu6050_ori/mpu6050_process.c
     src/mylib/can1.c
     src/mylib/can2.c
     src/mylib/delay.c
     src/mylib/laser.c
     src/mylib/led.c
     src/mylib/myiic.c
-    src/mylib/pwm.c
-    src/mylib/tim6.c
+    src/mylib/friction.c
+    src/mylib/timer.c
     src/mylib/usart1.c
     src/mylib/usart2.c
     src/user/app.c
@@ -154,7 +152,20 @@ set(SOURCE_FILES
     system/src/stm32f4-stdperiph/stm32f4xx_syscfg.c
     system/src/stm32f4-stdperiph/stm32f4xx_tim.c
     system/src/stm32f4-stdperiph/stm32f4xx_usart.c
-    system/src/stm32f4-stdperiph/stm32f4xx_wwdg.c)
+    system/src/stm32f4-stdperiph/stm32f4xx_wwdg.c
+
+    include/mylib/ticker.h
+    src/mylib/ticker.c
+    include/mylib/gimbal_motor.h
+    src/mylib/gimbal_motor.c
+    include/mylib/maincontrol.h
+    src/mylib/maincontrol.c
+    include/mylib/can_packet.h
+    include/mylib/can_packet_queue.h
+    include/mylib/shooter.h
+    src/mylib/shooter.c
+    include/mylib/pid.h
+    src/mylib/pid.c)
 
 include_directories(include)
 include_directories(include/mylib)

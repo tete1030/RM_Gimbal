@@ -1247,6 +1247,20 @@ int dmp_set_interrupt_mode(unsigned char mode)
     }
 }
 
+
+/**
+ *  @brief      Get unparsed dmp data packet from the FIFO.
+ *  @return     Number of remaining dmp data packet.
+ */
+
+int16_t dmp_get_fifo_packet_count()
+{
+    int tmp = mpu_get_fifo_data_count();
+    if(tmp == -1) return -1;
+    return (int16_t) (tmp / dmp.packet_length);
+
+};
+
 /**
  *  @brief      Get one packet from the FIFO.
  *  If @e sensors does not contain a particular sensor, disregard the data

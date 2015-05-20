@@ -1,239 +1,148 @@
+#include "stm32f4xx.h"
 #include "myiic.h"
 #include "mpu6050.h"
+#include "eMPL/inv_mpu.h"
+#include "eMPL/inv_mpu_dmp_motion_driver.h"
 #include "delay.h"
+#include "stm32f4xx_it.h"
+#include "gimbal_motor.h"
+#include <math.h>
 
-//////////////////////////////////////////////////////////////////////////////////	 
-//本程序只供学习使用，未经作者许可，不得用于其它任何用途
-//ALIENTEK STM32F407开发板
-//MPU6050 驱动代码
-//正点原子@ALIENTEK
-//技术论坛:www.openedv.com
-//创建日期:2014/5/9
-//版本：V1.0
-//版权所有，盗版必究。
-//Copyright(C) 广州市星翼电子科技有限公司 2014-2024
-//All rights reserved									  
-////////////////////////////////////////////////////////////////////////////////// 	
+//q30格式,long转float时的除数.
+#define q30  1073741824.0f
 
-//初始化MPU6050
-//返回值:0,成功
-//    其他,错误代码
-u8 MPU_Init(void)
-{ 
-	u8 res;
-	IIC_Init();//初始化IIC总线
-	MPU_Write_Byte(MPU_PWR_MGMT1_REG,0X80);	//复位MPU6050
-    delay_ms(100);
-	MPU_Write_Byte(MPU_PWR_MGMT1_REG,0X00);	//唤醒MPU6050
-	MPU_Set_Gyro_Fsr(3);					//陀螺仪传感器,±2000dps
-	MPU_Set_Accel_Fsr(0);					//加速度传感器,±2g
-	MPU_Set_Rate(50);						//设置采样率50Hz
-	MPU_Write_Byte(MPU_INT_EN_REG,0X00);	//关闭所有中断
-	MPU_Write_Byte(MPU_USER_CTRL_REG,0X00);	//I2C主模式关闭
-	MPU_Write_Byte(MPU_FIFO_EN_REG,0X00);	//关闭FIFO
-	MPU_Write_Byte(MPU_INTBP_CFG_REG,0X80);	//INT引脚低电平有效
-	res=MPU_Read_Byte(MPU_DEVICE_ID_REG);
-	if(res==MPU_ADDR)//器件ID正确
+//陀螺仪方向设置
+static signed char gyro_orientation[9] = { -1, 0, 0,
+										   0, -1, 0,
+										   0, 0, 1};
+
+uint8_t MPU_Init(void)
+{
+    GPIO_InitTypeDef    gpio;
+    NVIC_InitTypeDef    nvic;
+    EXTI_InitTypeDef    exti;
+	uint8_t res=0;
+
+	IIC_Init(); 		//初始化IIC总线
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB,  ENABLE);
+
+    gpio.GPIO_Pin = GPIO_Pin_5;
+    gpio.GPIO_Mode = GPIO_Mode_IN;
+    gpio.GPIO_OType = GPIO_OType_PP;
+    gpio.GPIO_PuPd = GPIO_PuPd_UP;
+    gpio.GPIO_Speed = GPIO_Speed_100MHz;
+    GPIO_Init(GPIOB, &gpio);
+
+    SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB,GPIO_PinSource5);
+
+    exti.EXTI_Line = EXTI_Line5;
+    exti.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti.EXTI_Trigger = EXTI_Trigger_Falling;//下降沿中断
+    exti.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&exti);
+
+    nvic.NVIC_IRQChannel = EXTI9_5_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = ITP_MPU_EXTI9_5_PREEMPTION;
+    nvic.NVIC_IRQChannelSubPriority = ITP_MPU_EXTI9_5_SUB;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+
+	if(mpu_init()==0)	//初始化MPU6050
 	{
-		MPU_Write_Byte(MPU_PWR_MGMT1_REG,0X01);	//设置CLKSEL,PLL X轴为参考
-		MPU_Write_Byte(MPU_PWR_MGMT2_REG,0X00);	//加速度与陀螺仪都工作
-		MPU_Set_Rate(50);						//设置采样率为50Hz
- 	}else return 1;
+		res=mpu_set_sensors(INV_XYZ_GYRO|INV_XYZ_ACCEL);//设置所需要的传感器
+		if(res)return 1;
+		res=mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);//设置FIFO
+		if(res)return 2;
+		res=mpu_set_sample_rate(DEFAULT_MPU_HZ);	//设置采样率
+		if(res)return 3;
+		res=dmp_load_motion_driver_firmware();		//加载dmp固件
+		if(res)return 4;
+		res=dmp_set_orientation(inv_orientation_matrix_to_scalar(gyro_orientation));//设置陀螺仪方向
+		if(res)return 5;
+		res=dmp_enable_feature(DMP_FEATURE_6X_LP_QUAT|DMP_FEATURE_TAP|	//设置dmp功能
+							   DMP_FEATURE_ANDROID_ORIENT|DMP_FEATURE_SEND_RAW_ACCEL|DMP_FEATURE_SEND_CAL_GYRO|
+							   DMP_FEATURE_GYRO_CAL);
+		if(res)return 6;
+		res=dmp_set_fifo_rate(DEFAULT_MPU_HZ);	//设置DMP输出速率(最大不超过200Hz)
+		if(res)return 7;
+        res=mpu_set_int_level(1);
+        if(res)return 8;
+		res=dmp_set_interrupt_mode(DMP_INT_CONTINUOUS);
+		if(res)return 9;
+		res=run_self_test();		//自检
+		if(res)return 10;
+		res=mpu_set_dmp_state(1);	//使能DMP
+		if(res)return 11;
+	}
 	return 0;
 }
-//设置MPU6050陀螺仪传感器满量程范围
-//fsr:0,±250dps;1,±500dps;2,±1000dps;3,±2000dps
-//返回值:0,设置成功
-//    其他,设置失败
-u8 MPU_Set_Gyro_Fsr(u8 fsr)
+
+int16_t MPU_DMP_Get_Remaining_Data_Count()
 {
-	return MPU_Write_Byte(MPU_GYRO_CFG_REG,fsr<<3);//设置陀螺仪满量程范围
-}
-//设置MPU6050加速度传感器满量程范围
-//fsr:0,±2g;1,±4g;2,±8g;3,±16g
-//返回值:0,设置成功
-//    其他,设置失败
-u8 MPU_Set_Accel_Fsr(u8 fsr)
-{
-	return MPU_Write_Byte(MPU_ACCEL_CFG_REG,fsr<<3);//设置加速度传感器满量程范围
-}
-//设置MPU6050的数字低通滤波器
-//lpf:数字低通滤波频率(Hz)
-//返回值:0,设置成功
-//    其他,设置失败
-u8 MPU_Set_LPF(u16 lpf)
-{
-	u8 data=0;
-	if(lpf>=188)data=1;
-	else if(lpf>=98)data=2;
-	else if(lpf>=42)data=3;
-	else if(lpf>=20)data=4;
-	else if(lpf>=10)data=5;
-	else data=6; 
-	return MPU_Write_Byte(MPU_CFG_REG,data);//设置数字低通滤波器
-}
-//设置MPU6050的采样率(假定Fs=1KHz)
-//rate:4~1000(Hz)
-//返回值:0,设置成功
-//    其他,设置失败
-u8 MPU_Set_Rate(u16 rate)
-{
-	u8 data;
-	if(rate>1000)rate=1000;
-	if(rate<4)rate=4;
-	data=1000/rate-1;
-	data=MPU_Write_Byte(MPU_SAMPLE_RATE_REG,data);	//设置数字低通滤波器
- 	return MPU_Set_LPF(rate/2);	//自动设置LPF为采样率的一半
+	return dmp_get_fifo_packet_count();
 }
 
-//得到温度值
-//返回值:温度值(扩大了100倍)
-short MPU_Get_Temperature(void)
-{
-    u8 buf[2]; 
-    short raw;
-	float temp;
-	MPU_Read_Len(MPU_ADDR,MPU_TEMP_OUTH_REG,2,buf); 
-    raw=((u16)buf[0]<<8)|buf[1];  
-    temp=36.53+((double)raw)/340;  
-    return temp*100;;
-}
-//得到陀螺仪值(原始值)
-//gx,gy,gz:陀螺仪x,y,z轴的原始读数(带符号)
-//返回值:0,成功
-//    其他,错误代码
-u8 MPU_Get_Gyroscope(short *gx,short *gy,short *gz)
-{
-    u8 buf[6],res;  
-	res=MPU_Read_Len(MPU_ADDR,MPU_GYRO_XOUTH_REG,6,buf);
-	if(res==0)
-	{
-		*gx=((u16)buf[0]<<8)|buf[1];  
-		*gy=((u16)buf[2]<<8)|buf[3];  
-		*gz=((u16)buf[4]<<8)|buf[5];
-	} 	
-    return res;;
-}
-//得到加速度值(原始值)
-//gx,gy,gz:陀螺仪x,y,z轴的原始读数(带符号)
-//返回值:0,成功
-//    其他,错误代码
-u8 MPU_Get_Accelerometer(short *ax,short *ay,short *az)
-{
-    u8 buf[6],res;  
-	res=MPU_Read_Len(MPU_ADDR,MPU_ACCEL_XOUTH_REG,6,buf);
-	if(res==0)
-	{
-		*ax=((u16)buf[0]<<8)|buf[1];  
-		*ay=((u16)buf[2]<<8)|buf[3];  
-		*az=((u16)buf[4]<<8)|buf[5];
-	} 	
-    return res;;
-}
-//IIC连续写
-//addr:器件地址
-//reg:寄存器地址
-//len:写入长度
-//buf:数据区
+//得到dmp处理后的数据(注意,本函数需要比较多堆栈,局部变量有点多)
+//pitch:俯仰角 精度:0.1°   范围:-90.0° <---> +90.0°
+//roll:横滚角  精度:0.1°   范围:-180.0°<---> +180.0°
+//yaw:航向角   精度:0.1°   范围:-180.0°<---> +180.0°
 //返回值:0,正常
-//    其他,错误代码
-u8 MPU_Write_Len(u8 addr,u8 reg,u8 len,u8 *buf)
+//    其他,失败
+uint8_t MPU_DMP_Get_Data(DMP_Data *dd)
 {
-	u8 i; 
-    IIC_Start(); 
-	IIC_Send_Byte((addr<<1)|0);//发送器件地址+写命令
-	if(IIC_Wait_Ack())	//等待应答
+	float q0=1.0f,q1=0.0f,q2=0.0f,q3=0.0f;
+	unsigned long sensor_timestamp;
+	short sensors;
+	unsigned char more;
+	long quat[4];
+	if(dmp_read_fifo(dd->gyro, dd->accel, quat, &sensor_timestamp, &sensors,&more))return 1;
+	/* Gyro and accel data are written to the FIFO by the DMP in chip frame and hardware units.
+	 * This behavior is convenient because it keeps the gyro and accel outputs of dmp_read_fifo and mpu_read_fifo consistent.
+	**/
+	/*if (sensors & INV_XYZ_GYRO )
+	send_packet(PACKET_TYPE_GYRO, gyro);
+	if (sensors & INV_XYZ_ACCEL)
+	send_packet(PACKET_TYPE_ACCEL, accel); */
+	/* Unlike gyro and accel, quaternions are written to the FIFO in the body frame, q30.
+	 * The orientation is set by the scalar passed to dmp_set_orientation during initialization.
+	**/
+	if(sensors&INV_WXYZ_QUAT)
 	{
-		IIC_Stop();		 
-		return 1;		
-	}
-    IIC_Send_Byte(reg);	//写寄存器地址
-    IIC_Wait_Ack();		//等待应答
-	for(i=0;i<len;i++)
-	{
-		IIC_Send_Byte(buf[i]);	//发送数据
-		if(IIC_Wait_Ack())		//等待ACK
-		{
-			IIC_Stop();	 
-			return 1;		 
-		}		
-	}    
-    IIC_Stop();	 
-	return 0;	
-} 
-//IIC连续读
-//addr:器件地址
-//reg:要读取的寄存器地址
-//len:要读取的长度
-//buf:读取到的数据存储区
-//返回值:0,正常
-//    其他,错误代码
-u8 MPU_Read_Len(u8 addr,u8 reg,u8 len,u8 *buf)
-{ 
- 	IIC_Start(); 
-	IIC_Send_Byte((addr<<1)|0);//发送器件地址+写命令
-	if(IIC_Wait_Ack())	//等待应答
-	{
-		IIC_Stop();		 
-		return 1;		
-	}
-    IIC_Send_Byte(reg);	//写寄存器地址
-    IIC_Wait_Ack();		//等待应答
-    IIC_Start();
-	IIC_Send_Byte((addr<<1)|1);//发送器件地址+读命令
-    IIC_Wait_Ack();		//等待应答
-	while(len)
-	{
-		if(len==1)*buf=IIC_Read_Byte(0);//读数据,发送nACK
-		else *buf=IIC_Read_Byte(1);		//读数据,发送ACK
-		len--;
-		buf++; 
-	}    
-    IIC_Stop();	//产生一个停止条件
-	return 0;	
-}
-//IIC写一个字节
-//reg:寄存器地址
-//data:数据
-//返回值:0,正常
-//    其他,错误代码
-u8 MPU_Write_Byte(u8 reg,u8 data) 				 
-{ 
-    IIC_Start(); 
-	IIC_Send_Byte((MPU_ADDR<<1)|0);//发送器件地址+写命令
-	if(IIC_Wait_Ack())	//等待应答
-	{
-		IIC_Stop();		 
-		return 1;		
-	}
-    IIC_Send_Byte(reg);	//写寄存器地址
-    IIC_Wait_Ack();		//等待应答
-	IIC_Send_Byte(data);//发送数据
-	if(IIC_Wait_Ack())	//等待ACK
-	{
-		IIC_Stop();	 
-		return 1;		 
-	}		 
-    IIC_Stop();	 
+		q0 = quat[0] / q30;	//q30格式转换为浮点数
+		q1 = quat[1] / q30;
+		q2 = quat[2] / q30;
+		q3 = quat[3] / q30;
+		//计算得到俯仰角/横滚角/航向角
+		dd->pitch = asin(-2 * q1 * q3 + 2 * q0* q2)* 57.3;	// pitch
+		dd->roll  = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2* q2 + 1)* 57.3;	// roll
+		dd->yaw   = atan2(2*(q1*q2 + q0*q3),q0*q0+q1*q1-q2*q2-q3*q3) * 57.3;	//yaw
+	}else return 2;
 	return 0;
 }
-//IIC读一个字节
-//reg:寄存器地址
-//返回值:读到的数据
-u8 MPU_Read_Byte(u8 reg)
+
+
+int16_t MPU_Get_Temperature()
 {
-	u8 res;
-    IIC_Start(); 
-	IIC_Send_Byte((MPU_ADDR<<1)|0);//发送器件地址+写命令
-	IIC_Wait_Ack();		//等待应答
-    IIC_Send_Byte(reg);	//写寄存器地址
-    IIC_Wait_Ack();		//等待应答
-    IIC_Start();
-	IIC_Send_Byte((MPU_ADDR<<1)|1);//发送器件地址+读命令
-    IIC_Wait_Ack();		//等待应答
-	res=IIC_Read_Byte(0);//读取数据,发送nACK
-    IIC_Stop();			//产生一个停止条件
-	return res;		
+    long temp;
+    if(mpu_get_temperature(&temp, NULL) == 0)
+        return (int16_t) temp;
+    else
+        return -1;
+
 }
 
+//MPU6050 外部中断处理函数
+void EXTI9_5_IRQHandler(void) {
+    if (EXTI_GetITStatus(EXTI_Line5) == SET) {
+        EXTI_ClearITPendingBit(EXTI_Line5);
 
+        if(absolute_control_enable) {
+            DMP_Data dmp_data;
+            if (MPU_DMP_Get_Data(&dmp_data) == 0)
+                Gimbal_Motor_Absolute_Control(&dmp_data);
+
+        }
+    }
+}

@@ -1,7 +1,21 @@
-#include "main.h"
+#include "stm32f4xx.h"
+#include "delay.h"
+#include "friction.h"
+#include "ticker.h"
+#include "timer.h"
 
 /*-LEFT---(PB3---TIM2_CH2)--*/
 /*-RIGHT--(PA15--TIM2_CH1)--*/
+
+#define PWM_COUNTER_VALUE 2500
+#define FRICTION_MAX_PWM 2000
+#define FRICTION_MIN_PWM 500
+#define FRICTION_ON_PWM 500
+#define FRICTION_OFF_PWM 300
+
+uint64_t last_friction_on_tick = 0;
+
+uint8_t friction_state = 0;
 
 void PWM_Configuration(void)
 {
@@ -31,7 +45,7 @@ void PWM_Configuration(void)
     
     tim.TIM_Prescaler = 84-1;
     tim.TIM_CounterMode = TIM_CounterMode_Up;
-    tim.TIM_Period = 2500;   //2.5ms
+    tim.TIM_Period = PWM_COUNTER_VALUE;   //2.5ms
     tim.TIM_ClockDivision = TIM_CKD_DIV1;
     TIM_TimeBaseInit(TIM2,&tim);
     
@@ -52,9 +66,45 @@ void PWM_Configuration(void)
     TIM_ARRPreloadConfig(TIM2,ENABLE);
 
     TIM_Cmd(TIM2,ENABLE);
-    
 
 }
 
+void Friction_Configuration(void)
+{
+    PWM_Configuration();
+}
 
+void Friction_Ready_Callback(uint8_t timer_id)
+{
+    friction_state = 2;
+    Timer_Unregister(timer_id);
+}
+
+void Friction_Set_Enable(uint8_t enable)
+{
+    if(enable && friction_state == 0) {
+        friction_state = 1;
+        last_friction_on_tick = Ticker_Get_Tick();
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_ON_PWM;
+        Timer_Register(1000, Friction_Ready_Callback);
+    }
+    else {
+        friction_state = 0;
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_OFF_PWM;
+    }
+}
+
+uint8_t Friction_Get_State()
+{
+    return friction_state;
+}
+
+void Friction_Init_Speed_Controller()
+{
+    // TODO: correct process
+    TIM2->CCR1 = TIM2->CCR2 = FRICTION_MAX_PWM;
+    delay_ms(5000);
+    TIM2->CCR1 = TIM2->CCR2 = FRICTION_MIN_PWM;
+    delay_ms(5000);
+}
 
