@@ -12,18 +12,25 @@
 #define q30  1073741824.0f
 
 //陀螺仪方向设置
+
 static signed char gyro_orientation[9] = { -1, 0, 0,
 										   0, -1, 0,
 										   0, 0, 1};
+
+
+// 将X和Y颠倒, 在解析Pitch和Roll时再颠倒回来, 以便使Pitch能够支持在-180~180度
+//static signed char gyro_orientation[9] = { 0, -1, 0,
+//                                           -1, 0, 0,
+//                                           0, 0, 1};
 
 uint8_t MPU_Init(void)
 {
     GPIO_InitTypeDef    gpio;
     NVIC_InitTypeDef    nvic;
     EXTI_InitTypeDef    exti;
-	uint8_t res=0;
+	int res=0;
 
-	IIC_Init(); 		//初始化IIC总线
+	IIC_Init();
 
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB,  ENABLE);
@@ -76,6 +83,8 @@ uint8_t MPU_Init(void)
 		res=mpu_set_dmp_state(1);	//使能DMP
 		if(res)return 11;
 	}
+	else
+		return 12;
 	return 0;
 }
 
@@ -115,9 +124,16 @@ uint8_t MPU_DMP_Get_Data(DMP_Data *dd)
 		q2 = quat[2] / q30;
 		q3 = quat[3] / q30;
 		//计算得到俯仰角/横滚角/航向角
-		dd->pitch = asin(-2 * q1 * q3 + 2 * q0* q2)* 57.3;	// pitch
-		dd->roll  = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2* q2 + 1)* 57.3;	// roll
-		dd->yaw   = atan2(2*(q1*q2 + q0*q3),q0*q0+q1*q1-q2*q2-q3*q3) * 57.3;	//yaw
+
+        dd->yaw   = atan2(2*(q1*q2 + q0*q3),q0*q0+q1*q1-q2*q2-q3*q3) * 57.3;
+		dd->pitch = asin(-2 * q1 * q3 + 2 * q0* q2)* 57.3;
+		dd->roll  = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2* q2 + 1)* 57.3;
+
+        // 在方向定义处将X和Y颠倒, 在解析Pitch和Roll时再颠倒回来, 以便使Pitch能够支持在-180~180度
+        //dd->yaw   = atan2(2*(q1*q2 + q0*q3),q0*q0+q1*q1-q2*q2-q3*q3) * 57.3;
+        //dd->pitch  = atan2(2 * q2 * q3 + 2 * q0 * q1, -2 * q1 * q1 - 2 * q2* q2 + 1)* 57.3;
+        //dd->roll = asin(-2 * q1 * q3 + 2 * q0* q2)* 57.3;
+
 	}else return 2;
 	return 0;
 }
@@ -135,14 +151,17 @@ int16_t MPU_Get_Temperature()
 
 //MPU6050 外部中断处理函数
 void EXTI9_5_IRQHandler(void) {
+	uint8_t ret;
+    DMP_Data dmp_data;
+
     if (EXTI_GetITStatus(EXTI_Line5) == SET) {
         EXTI_ClearITPendingBit(EXTI_Line5);
 
-        if(absolute_control_enable) {
-            DMP_Data dmp_data;
-            if (MPU_DMP_Get_Data(&dmp_data) == 0)
-                Gimbal_Motor_Absolute_Control(&dmp_data);
+        while ((ret = MPU_DMP_Get_Data(&dmp_data)) == 0 && MPU_DMP_Get_Remaining_Data_Count() > 0);
+        if(ret == 0)
+		{
+            GM_Set_DMP_Data(&dmp_data);
+		}
 
-        }
     }
 }

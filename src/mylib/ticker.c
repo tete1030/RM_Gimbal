@@ -3,7 +3,7 @@
 
 #define TICKER_CYCLE_COUNT 0x01000000
 
-uint64_t ticker = 0;
+volatile uint64_t ticker = 0;
 uint32_t ms_tickcount = 0;
 
 void Ticker_Configuration(void)
@@ -26,7 +26,13 @@ void Ticker_Configuration(void)
 
 inline uint64_t Ticker_Get_Tick(void)
 {
-    return ticker + TICKER_CYCLE_COUNT - SysTick->VAL;
+    uint64_t ret;
+    // Disable Systick
+    NVIC->ICER[SysTick_IRQn >> 0x05] = (uint32_t) 0x01 << (SysTick_IRQn & (uint8_t) 0x1F);
+    ret = ticker + TICKER_CYCLE_COUNT - SysTick->VAL;
+    // Enable Systick
+    NVIC->ISER[SysTick_IRQn >> 0x05] = (uint32_t) 0x01 << (SysTick_IRQn & (uint8_t) 0x1F);
+    return ret;
 }
 
 inline uint32_t Ticker_Get_MS_Tickcount()

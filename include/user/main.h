@@ -14,5 +14,10 @@
 #include <mpu6050_ori/mpu6050_interrupt.h>
 #include <mpu6050_ori/mpu6050_process.h>
 
+//#define CAR_1
+#define CAR_2
+//#define CAR_3
+
+#define CAN_ADDR 0x0
 
 #endif

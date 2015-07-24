@@ -37,8 +37,8 @@ void SysTick_Handler(void);
 #define ITP_CAN1_TX_PREEMPTION 2
 #define ITP_CAN1_TX_SUB 2
 
-#define ITP_CAN2_RX0_PREEMPTION 2
-#define ITP_CAN2_RX0_SUB 1
+#define ITP_CAN2_RX1_PREEMPTION 2
+#define ITP_CAN2_RX1_SUB 1
 
 #define ITP_CAN2_TX_PREEMPTION 2
 #define ITP_CAN2_TX_SUB 2

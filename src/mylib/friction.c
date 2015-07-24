@@ -3,19 +3,29 @@
 #include "friction.h"
 #include "ticker.h"
 #include "timer.h"
+#include "shooter.h"
+#include "laser.h"
+#include "main.h"
+
 
 /*-LEFT---(PB3---TIM2_CH2)--*/
 /*-RIGHT--(PA15--TIM2_CH1)--*/
 
-#define PWM_COUNTER_VALUE 2500
+#define PWM_COUNTER_VALUE 20000
+#define FRICTION_INIT_PWM 10000
 #define FRICTION_MAX_PWM 2000
-#define FRICTION_MIN_PWM 500
-#define FRICTION_ON_PWM 500
-#define FRICTION_OFF_PWM 300
+#define FRICTION_MIN_PWM 1000
+#if defined CAR_1
+#define FRICTION_ON_PWM 1500
+#elif defined CAR_2
+#define FRICTION_ON_PWM 1300
+#elif defined CAR_3
+#define FRICTION_ON_PWM 1350
+#endif
+#define FRICTION_OFF_PWM 1000
 
-uint64_t last_friction_on_tick = 0;
+volatile Friction_State friction_state = Friction_State_Prepare;
 
-uint8_t friction_state = 0;
 
 void PWM_Configuration(void)
 {
@@ -69,42 +79,95 @@ void PWM_Configuration(void)
 
 }
 
-void Friction_Configuration(void)
+void Friction_Init(Friction_Start_Mode fsm)
 {
+	uint32_t ms_tick = 0;
+	uint64_t end_tick = 0;
     PWM_Configuration();
-}
 
-void Friction_Ready_Callback(uint8_t timer_id)
-{
-    friction_state = 2;
-    Timer_Unregister(timer_id);
-}
+    if(friction_state != Friction_State_Prepare) return;
+    //TIM2->CCR1 = TIM2->CCR2 = FRICTION_INIT_PWM;
+    //delay_ms(20);
+    ms_tick = (uint32_t) Ticker_Get_MS_Tickcount();
 
-void Friction_Set_Enable(uint8_t enable)
-{
-    if(enable && friction_state == 0) {
-        friction_state = 1;
-        last_friction_on_tick = Ticker_Get_Tick();
-        TIM2->CCR1 = TIM2->CCR2 = FRICTION_ON_PWM;
-        Timer_Register(1000, Friction_Ready_Callback);
+    if(fsm == Friction_Start_Mode_Normal)
+    {
+    	end_tick = (uint64_t)ms_tick * 4000;
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_OFF_PWM;
+        while(end_tick > Ticker_Get_Tick());
+        friction_state = Friction_State_Off;
     }
-    else {
-        friction_state = 0;
+    else if(fsm == Friction_Start_Mode_Set_Range)
+    {
+        friction_state = Friction_State_Set_Range;
+        // 油门行程
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_MAX_PWM;
+        delay_ms(2000);
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_MIN_PWM;
+        delay_ms(2000);
+        friction_state = Friction_State_Off;
+    }
+    else if(fsm == Friction_Start_Mode_Mannual_Control)
+    {
+        friction_state = Friction_State_Mannual_Control;
+    }
+
+
+}
+
+void Friction_Turning_On_Callback()
+{
+    // TODO: require top interrupt priority(disable interrupt?)
+
+    if(friction_state == Friction_State_Turning_On) {
+        friction_state = Friction_State_On;
+
+        if(shooter_state == Shooter_State_On_Ready)
+            Shooter_Start();
+    }
+}
+
+void Friction_Turning_Off_Callback()
+{
+    // TODO: require top interrupt priority(disable interrupt?)
+    if(friction_state == Friction_State_Turning_Off) {
+        friction_state = Friction_State_Off;
         TIM2->CCR1 = TIM2->CCR2 = FRICTION_OFF_PWM;
     }
 }
 
-uint8_t Friction_Get_State()
+void Friction_Set_Enable(uint8_t enable)
+{
+    if(enable && friction_state == Friction_State_Off) {
+        friction_state = Friction_State_Turning_On;
+        //last_friction_on_tick = Ticker_Get_Tick();
+        TIM2->CCR1 = TIM2->CCR2 = FRICTION_ON_PWM;
+        Laser_On();
+        Timer_Setup_Task(500, Friction_Turning_On_Callback);
+    }
+    else if(!enable && (friction_state == Friction_State_On || friction_state == Friction_State_Turning_On)) {
+        friction_state = Friction_State_Turning_Off;
+        Laser_Off();
+        if(shooter_state == Shooter_State_On) {
+            Shooter_Stop();
+            shooter_state = Shooter_State_On_Ready;
+        }
+        Timer_Setup_Task(500, Friction_Turning_Off_Callback);
+    }
+}
+
+Friction_State Friction_Get_State()
 {
     return friction_state;
 }
 
-void Friction_Init_Speed_Controller()
-{
-    // TODO: correct process
-    TIM2->CCR1 = TIM2->CCR2 = FRICTION_MAX_PWM;
-    delay_ms(5000);
-    TIM2->CCR1 = TIM2->CCR2 = FRICTION_MIN_PWM;
-    delay_ms(5000);
-}
 
+void Friction_Set_Remoter_Value(uint16_t value)
+{
+    if(friction_state == Friction_State_Mannual_Control) {
+        if(value > 1684) value = 1684;
+        else if(value < 1024) value = 1024;
+        TIM2->CCR1 = TIM2->CCR2 = 1000 + ((value - 1024) * 1000 / 660);
+    }
+
+}

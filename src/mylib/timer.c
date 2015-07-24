@@ -8,7 +8,8 @@ typedef struct Timer_Callback
     uint8_t active;
     uint32_t start_timer;
     uint32_t interval_ms;
-    void (*callback)(uint8_t);
+    uint8_t one_time;
+    void (*callback)(void);
 } Timer_Callback;
 
 Timer_Callback tc_list[TIMER_TASK_MAX_COUNT];
@@ -43,6 +44,7 @@ void Timer_Configuration(void)
     	tc_list[i].interval_ms = 0;
     	tc_list[i].callback = 0;
     	tc_list[i].start_timer = 0;
+    	tc_list[i].one_time = 0;
     }
 }
 
@@ -54,7 +56,7 @@ void Timer_Start(void)
 
 }
 
-int8_t Timer_Register(uint32_t interval_ms, void (*callback)(uint8_t))
+int8_t Timer_Register(uint32_t interval_ms, void (*callback)(void))
 {
     uint8_t index;
 
@@ -71,10 +73,12 @@ int8_t Timer_Register(uint32_t interval_ms, void (*callback)(uint8_t))
     if (index >= TIMER_TASK_MAX_COUNT) return -1;
 
 
-    tc_list[index].start_timer = timer_counter;
+    tc_list[index].start_timer = timer_counter + interval_ms + 1;
     tc_list[index].interval_ms = interval_ms;
     tc_list[index].callback = callback;
+    tc_list[index].one_time = 0;
     tc_list[index].active = 1;
+
     if(tc_count == index) tc_count ++;
 
     return (int8_t)(index);
@@ -87,11 +91,19 @@ void Timer_Unregister(int8_t index)
     if(index + 1 == tc_count) tc_count--;
 }
 
+int8_t Timer_Setup_Task(uint32_t delay, void (*callback)(void))
+{
+    int8_t ret;
+    ret = Timer_Register(delay, callback);
+    if(ret >= 0) tc_list[ret].one_time = 1;
+    return ret;
+}
 
 void TIM6_DAC_IRQHandler(void)  
 {
 	uint8_t i;
     uint8_t tc_count_tmp;
+    int32_t timer_diff;
 	if (TIM_GetITStatus(TIM6,TIM_IT_Update)!= RESET) {
         TIM_ClearITPendingBit(TIM6, TIM_IT_Update);
 
@@ -99,8 +111,13 @@ void TIM6_DAC_IRQHandler(void)
         timer_counter++;
 
         for (i = 0; i < tc_count_tmp; i++) {
-            if (tc_list[i].active && ((tc_list[i].start_timer + timer_counter) % tc_list[i].interval_ms) == 0) {
-                tc_list[i].callback(i);
+            if (tc_list[i].active) {
+                timer_diff = timer_counter - tc_list[i].start_timer;
+                if(timer_diff >= 0 && (timer_diff % tc_list[i].interval_ms) == 0) {
+                    tc_list[i].callback();
+                    if(tc_list[i].one_time) Timer_Unregister(i);
+
+                }
             }
         }
     }

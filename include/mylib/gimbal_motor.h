@@ -8,33 +8,35 @@
 #include <stdint.h>
 #include "mpu6050/mpu6050.h"
 
-typedef struct Gimbal_Motor_Status
+typedef struct GM_Status
 {
-    uint16_t angle;
+    int16_t angle;
     int16_t actual_current;
     int16_t demand_current;
     uint8_t hall_state;
-} Gimbal_Motor_Status;
+} GM_Status;
 
-extern Gimbal_Motor_Status gms_yaw;
-extern Gimbal_Motor_Status gms_pitch;
+extern volatile GM_Status gms_yaw;
+extern volatile GM_Status gms_pitch;
 
 void Gimbal_Motor_Configuration(void);
+void GM_Set_DMP_Data(DMP_Data *dd);
+//void GM_Set_Control_Target_Absolute_Yaw_Pitch(float yaw, float pitch);
+void GM_Set_Control_Target_Relative_Yaw_Pitch(int16_t yaw, int16_t pitch);
+void GM_Set_Control_Target_Absolute_Yaw_Pitch_Speed(float yaw, float pitch);
 
-void Gimbal_Set_Control_Target_Absolute_Yaw_Pitch(float yaw, float pitch);
-void Gimbal_Set_Control_Target_Relative_Yaw_Pitch(uint16_t yaw, uint16_t pitch);
-void Gimbal_Consume_Control_Target_Absolute_Yaw_Pitch_Speed(float yaw, float pitch);
+void GM_Start_Relative_Control();
+void GM_Stop_Relative_Control();
+void GM_Stop_Pitch_Relative_Control();
+void GM_Set_Standard_Position();
 
+void GM_Start_Absolute_Control();
+void GM_Stop_Absolute_Control();
 
-void Gimbal_Start_Standard_Position();
-void Gimbal_End_Standard_Position();
-void Gimbal_Start_Track_Position();
-void Gimbal_End_Track_Position();
+void GM_Set_Speed(int16_t pitch_speed, int16_t yaw_speed);
 
-void Gimbal_Motor_Set_Speed(int16_t pitch_speed, int16_t yaw_speed);
+void GM_Absolute_Control();
+void GM_Relative_Control();
 
-
-void Gimbal_Motor_Absolute_Control(DMP_Data *dmp_data);
-extern uint8_t absolute_control_enable;
 
 #endif //__GIMBAL_MOTOR_H__
